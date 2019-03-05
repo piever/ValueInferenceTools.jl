@@ -1,5 +1,6 @@
 module ValueInferenceTools
 
-greet() = print("Hello World!")
+include("probabilities.jl")
+include("accumulate.jl")
 
 end # module
