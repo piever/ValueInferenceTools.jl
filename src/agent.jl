@@ -24,26 +24,26 @@ function Base.iterate(s::Simulator, (side, sidehigh) = (rand(Bool), rand(Bool)))
     return outcome, (newside, sidehigh)
 end
 
-function inferencesimulator(prob::TaskStats, ind, β)
+function inferencesimulator(prob::TaskStats, T, β)
     acc = InferenceAccumulator(prob)
-    decision = DiffRule(ind, β)
+    decision = DiffRule(T, β)
     Simulator(prob, acc, decision)
 end
 
-function valuesimulator(prob::TaskStats, γ, ind, β)
+function valuesimulator(prob::TaskStats, γ, T, β)
     acc = ValueAccumulator(γ)
-    decision = DiffRule(ind, β)
+    decision = DiffRule(T, β)
     Simulator(prob, acc, decision)
 end
 
 struct DiffRule{T}
-    ind::T
+    T::T
     β::T
 end
 
 DiffRule(a, b) = DiffRule(promote(a, b)...)
 
 function (dr::DiffRule)(diff, side)
-    Δind = diff + dr.ind*to_sign(side)
+    Δind = diff + dr.T*to_sign(side)
     return rand() < logistic(dr.β*Δind)
 end
