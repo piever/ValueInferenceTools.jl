@@ -27,21 +27,37 @@ function valuediff(prob::TaskStats{T}, rewards::AbstractVector{Bool}, sides::Abs
     to_diff.(ratios) .* prob.rwd
 end
 
-mutable struct InferenceAccumulator{T}
+mutable struct InferenceAccumulator{T, I}
     prob::TaskStats{T}
+    itr::I
     value::T
     side::Union{Bool, Missing}
     reward_evidence::T
     failure_evidence::T
-    function InferenceAccumulator(prob::TaskStats{T}, value::T = zero(T), side::Union{Bool, Missing} = missing;
+    function InferenceAccumulator(prob::TaskStats{T}, itr::I, value::T = zero(T), side::Union{Bool, Missing} = missing;
                                   reward_evidence::T = zero(T),
-                                  failure_evidence::T = one(T) / (one(T) - prob.rwd)) where {T}
-        new{T}(prob, value, side, reward_evidence, failure_evidence)
+                                  failure_evidence::T = one(T) / (one(T) - prob.rwd)) where {T, I}
+        new{T, I}(prob, itr, value, side, reward_evidence, failure_evidence)
     end
 end
 
 Base.getindex(s::InferenceAccumulator) = s.value
 Base.setindex!(s::InferenceAccumulator, val) = (s.value = val; s.value)
+
+function Base.iterate(acc::InferenceAccumulator, args...)
+    next = iterate(acc.itr, args...)
+    next === nothing && return nothing
+    (val, status) = next
+    rwd, sd = val
+    return updateprobabilityratio!(acc, rwd, sd), status
+end
+
+Base.IteratorSize(::Type{InferenceAccumulator{T, I}}) where {T, I} = Base.IteratorSize(I)
+Base.IteratorEltype(::Type{InferenceAccumulator{T, I}}) where {T, I} = Base.HasEltype()
+
+Base.length(acc::InferenceAccumulator) = length(acc.itr)
+Base.size(acc::InferenceAccumulator) = size(acc.itr)
+Base.eltype(::Type{InferenceAccumulator{T, I}}) where {T, I} = T
 
 function updateprobabilityratio!(acc::InferenceAccumulator{T}, rwd, sd)::T where T
     prob = acc.prob
@@ -59,11 +75,5 @@ function updateprobabilityratio!(acc::InferenceAccumulator{T}, rwd, sd)::T where
 end
 
 function probabilityratio(prob::TaskStats{T}, rewards::AbstractVector{Bool}, sides::AbstractVector{Bool}) where T
-    acc = InferenceAccumulator(prob)
-    N = length(rewards)
-    vals = Vector{T}(undef, N)
-    for (i, (rw, sd)) in enumerate(zip(rewards, sides))
-        vals[i] = updateprobabilityratio!(acc, rw, sd)
-    end
-    vals
+    collect(InferenceAccumulator(prob, zip(rewards, sides)))
 end
