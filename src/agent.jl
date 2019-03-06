@@ -38,6 +38,6 @@ end
 DiffRule(a, b) = DiffRule(promote(a, b)...)
 
 function (dr::DiffRule)(diff, side)
-    Δind = diff - dr.ind*to_sign(side)
+    Δind = diff + dr.ind*to_sign(side)
     return rand() < logistic(dr.β*Δind)
 end
