@@ -2,36 +2,12 @@
 
 abstract type AbstractAccumulator{T}; end
 
-struct AccumulateFromData{T, I, W<:AbstractAccumulator{T}}
-    acc::W
-    itr::I
-    AccumulateFromData(acc::AbstractAccumulator{T}, itr::I) where {T, I} =
-        new{T, I, typeof(acc)}(acc, itr)
+Base.getindex(s::T) where {T<:AbstractAccumulator} = error("getindex not defined for $T")
+Base.setindex!(s::T, val) where {T<:AbstractAccumulator} = error("setindex! not defined for $T")
+
+function update!(acc::T, rw, sd) where T<:AbstractAccumulator
+    error("update! not defined for $T")
 end
-
-getiterator(s::AccumulateFromData) = s.itr
-getaccumulator(s::AccumulateFromData) = s.acc
-
-function Base.iterate(acc::AccumulateFromData, args...)
-    next = iterate(getiterator(acc), args...)
-    next === nothing && return nothing
-    (val, status) = next
-    rwd, sd = val
-    return update!(getaccumulator(acc), rwd, sd), status
-end
-
-Base.IteratorSize(::Type{AccumulateFromData{T, I}}) where {T, I} = Base.IteratorSize(I)
-Base.IteratorEltype(::Type{AccumulateFromData{T, I}}) where {T, I} = Base.HasEltype()
-
-Base.length(acc::AccumulateFromData) = length(getiterator(acc))
-Base.size(acc::AccumulateFromData) = size(getiterator(acc))
-Base.eltype(::Type{<:AccumulateFromData{T, I}}) where {T, I} = T
-
-Base.getindex(s::AccumulateFromData) = getindex(getaccumulator(s))
-Base.setindex!(s::AccumulateFromData, val) = setindex!(getaccumulator(s), val)
-
-accumulatefromdata(acc::AbstractAccumulator, rewards, sides) =
-    collect(AccumulateFromData(acc, zip(rewards, sides)))
 
 ################################################################################
 
@@ -90,6 +66,37 @@ function update!(acc::InferenceAccumulator{T}, rwd, sd)::T where T
 end
 
 ###############################################################################
+
+struct AccumulateFromData{T, I, W<:AbstractAccumulator{T}}
+    acc::W
+    itr::I
+    AccumulateFromData(acc::AbstractAccumulator{T}, itr::I) where {T, I} =
+        new{T, I, typeof(acc)}(acc, itr)
+end
+
+getiterator(s::AccumulateFromData) = s.itr
+getaccumulator(s::AccumulateFromData) = s.acc
+
+function Base.iterate(acc::AccumulateFromData, args...)
+    next = iterate(getiterator(acc), args...)
+    next === nothing && return nothing
+    (val, status) = next
+    rwd, sd = val
+    return update!(getaccumulator(acc), rwd, sd), status
+end
+
+Base.IteratorSize(::Type{AccumulateFromData{T, I}}) where {T, I} = Base.IteratorSize(I)
+Base.IteratorEltype(::Type{AccumulateFromData{T, I}}) where {T, I} = Base.HasEltype()
+
+Base.length(acc::AccumulateFromData) = length(getiterator(acc))
+Base.size(acc::AccumulateFromData) = size(getiterator(acc))
+Base.eltype(::Type{<:AccumulateFromData{T, I}}) where {T, I} = T
+
+Base.getindex(s::AccumulateFromData) = getindex(getaccumulator(s))
+Base.setindex!(s::AccumulateFromData, val) = setindex!(getaccumulator(s), val)
+
+accumulatefromdata(acc::AbstractAccumulator, rewards, sides) =
+    collect(AccumulateFromData(acc, zip(rewards, sides)))
 
 function valuediff(γ::T, rewards::AbstractVector{Bool}, sides::AbstractVector{Bool}) where T
     accumulatefromdata(ValueAccumulator(γ), rewards, sides)
