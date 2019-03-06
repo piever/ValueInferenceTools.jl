@@ -1,65 +1,80 @@
+# Interface
+
+abstract type AbstractAccumulator{T}; end
+
+struct AccumulateFromData{T, I, W<:AbstractAccumulator{T}}
+    acc::W
+    itr::I
+    AccumulateFromData(acc::AbstractAccumulator{T}, itr::I) where {T, I} =
+        new{T, I, typeof(acc)}(acc, itr)
+end
+
+getiterator(s::AccumulateFromData) = s.itr
+getaccumulator(s::AccumulateFromData) = s.acc
+
+function Base.iterate(acc::AccumulateFromData, args...)
+    next = iterate(getiterator(acc), args...)
+    next === nothing && return nothing
+    (val, status) = next
+    rwd, sd = val
+    return update!(getaccumulator(acc), rwd, sd), status
+end
+
+Base.IteratorSize(::Type{AccumulateFromData{T, I}}) where {T, I} = Base.IteratorSize(I)
+Base.IteratorEltype(::Type{AccumulateFromData{T, I}}) where {T, I} = Base.HasEltype()
+
+Base.length(acc::AccumulateFromData) = length(getiterator(acc))
+Base.size(acc::AccumulateFromData) = size(getiterator(acc))
+Base.eltype(::Type{<:AccumulateFromData{T, I}}) where {T, I} = T
+
+Base.getindex(s::AccumulateFromData) = getindex(getaccumulator(s))
+Base.setindex!(s::AccumulateFromData, val) = setindex!(getaccumulator(s), val)
+
+accumulatefromdata(acc::AbstractAccumulator, rewards, sides) =
+    collect(AccumulateFromData(acc, zip(rewards, sides)))
+
+################################################################################
+
 to_sign(b::Bool) = ifelse(b, 1, -1)
+
+mutable struct ValueAccumulator{T} <: AbstractAccumulator{T}
+    γ::T
+    value::T
+end
+
+ValueAccumulator(γ::T) where {T} = ValueAccumulator(γ, zero(T))
+
+Base.getindex(s::ValueAccumulator) = s.value
+Base.setindex!(s::ValueAccumulator, val) = (s.value = val; s.value)
+
+function update!(acc::ValueAccumulator{T}, rw, sd)::T where T
+    setindex!(acc, (one(T)-acc.γ) * acc[] + acc.γ * rw * to_sign(sd))
+end
+
+################################################################################
 
 function to_diff(s::T) where T
     x = 1-1/(1+s)
     x - (1 - x)
 end
 
-updatevaluediff(γ::T, rw::Bool, sd::Bool, prev::Nothing) where {T} = updatevaluediff(γ, rw, sd)
-
-function updatevaluediff(γ::T, rw::Bool, sd::Bool, prev::T = zero(T))::T where T
-    (one(T)-γ) * prev + γ * rw * to_sign(sd)
-end
-
-function valuediff(γ::T, rewards::AbstractVector{Bool}, sides::AbstractVector{Bool}) where T
-    vals = Vector{T}(undef, length(rewards))
-    for (i, (rw, sd)) in enumerate(zip(rewards, sides))
-        prev = get(vals, i-1, nothing)
-        vals[i] = updatevaluediff(γ, rw, sd, prev)
-    end
-    vals
-end
-
-################################################################################
-
-function valuediff(prob::TaskStats{T}, rewards::AbstractVector{Bool}, sides::AbstractVector{Bool}) where T
-    ratios = probabilityratio(prob, rewards, sides)
-    to_diff.(ratios) .* prob.rwd
-end
-
-mutable struct InferenceAccumulator{T, I}
+mutable struct InferenceAccumulator{T} <: AbstractAccumulator{T}
     prob::TaskStats{T}
-    itr::I
     value::T
     side::Union{Bool, Nothing}
     reward_evidence::T
     failure_evidence::T
-    function InferenceAccumulator(prob::TaskStats{T}, itr::I, value::T = zero(T), side::Union{Bool, Nothing} = nothing;
+    function InferenceAccumulator(prob::TaskStats{T}, value::T = zero(T), side::Union{Bool, Nothing} = nothing;
                                   reward_evidence::T = zero(T),
-                                  failure_evidence::T = one(T) / (one(T) - prob.rwd)) where {T, I}
-        new{T, I}(prob, itr, value, side, reward_evidence, failure_evidence)
+                                  failure_evidence::T = one(T) / (one(T) - prob.rwd)) where {T}
+        new{T}(prob, value, side, reward_evidence, failure_evidence)
     end
 end
 
 Base.getindex(s::InferenceAccumulator) = s.value
 Base.setindex!(s::InferenceAccumulator, val) = (s.value = val; s.value)
 
-function Base.iterate(acc::InferenceAccumulator, args...)
-    next = iterate(acc.itr, args...)
-    next === nothing && return nothing
-    (val, status) = next
-    rwd, sd = val
-    return updateprobabilityratio!(acc, rwd, sd), status
-end
-
-Base.IteratorSize(::Type{InferenceAccumulator{T, I}}) where {T, I} = Base.IteratorSize(I)
-Base.IteratorEltype(::Type{InferenceAccumulator{T, I}}) where {T, I} = Base.HasEltype()
-
-Base.length(acc::InferenceAccumulator) = length(acc.itr)
-Base.size(acc::InferenceAccumulator) = size(acc.itr)
-Base.eltype(::Type{InferenceAccumulator{T, I}}) where {T, I} = T
-
-function updateprobabilityratio!(acc::InferenceAccumulator{T}, rwd, sd)::T where T
+function update!(acc::InferenceAccumulator{T}, rwd, sd)::T where T
     prob = acc.prob
     prior = if acc.side === nothing
         acc[]
@@ -74,6 +89,17 @@ function updateprobabilityratio!(acc::InferenceAccumulator{T}, rwd, sd)::T where
     setindex!(acc, sd ? one(T) / posterior : posterior)
 end
 
+###############################################################################
+
+function valuediff(γ::T, rewards::AbstractVector{Bool}, sides::AbstractVector{Bool}) where T
+    accumulatefromdata(ValueAccumulator(γ), rewards, sides)
+end
+
+function valuediff(prob::TaskStats{T}, rewards::AbstractVector{Bool}, sides::AbstractVector{Bool}) where T
+    ratios = probabilityratio(prob, rewards, sides)
+    to_diff.(ratios) .* prob.rwd
+end
+
 function probabilityratio(prob::TaskStats{T}, rewards::AbstractVector{Bool}, sides::AbstractVector{Bool}) where T
-    collect(InferenceAccumulator(prob, zip(rewards, sides)))
+    accumulatefromdata(InferenceAccumulator(prob), rewards, sides)
 end
