@@ -1,7 +1,7 @@
 module ValueInferenceTools
 
 export TaskStats, InferenceAccumulator, ValueAccumulator, Simulator
-export accumulatefromdata
+export accumulatefromdata, inferencesimulator, valuesimulator
 
 using StatsFuns: logistic
 

@@ -30,6 +30,12 @@ function inferencesimulator(prob::TaskStats, ind, β)
     Simulator(prob, acc, decision)
 end
 
+function valuesimulator(prob::TaskStats, γ, ind, β)
+    acc = ValueAccumulator(γ)
+    decision = DiffRule(ind, β)
+    Simulator(prob, acc, decision)
+end
+
 struct DiffRule{T}
     ind::T
     β::T
