@@ -31,10 +31,10 @@ mutable struct InferenceAccumulator{T, I}
     prob::TaskStats{T}
     itr::I
     value::T
-    side::Union{Bool, Missing}
+    side::Union{Bool, Nothing}
     reward_evidence::T
     failure_evidence::T
-    function InferenceAccumulator(prob::TaskStats{T}, itr::I, value::T = zero(T), side::Union{Bool, Missing} = missing;
+    function InferenceAccumulator(prob::TaskStats{T}, itr::I, value::T = zero(T), side::Union{Bool, Nothing} = nothing;
                                   reward_evidence::T = zero(T),
                                   failure_evidence::T = one(T) / (one(T) - prob.rwd)) where {T, I}
         new{T, I}(prob, itr, value, side, reward_evidence, failure_evidence)
@@ -61,7 +61,7 @@ Base.eltype(::Type{InferenceAccumulator{T, I}}) where {T, I} = T
 
 function updateprobabilityratio!(acc::InferenceAccumulator{T}, rwd, sd)::T where T
     prob = acc.prob
-    prior = if ismissing(acc.side)
+    prior = if acc.side === nothing
         acc[]
     else
         prevlow = acc.side ? one(T) / acc[] : acc[]
