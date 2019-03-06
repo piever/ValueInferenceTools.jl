@@ -26,7 +26,7 @@ end
 
 function inferencesimulator(prob::TaskStats, ind, β)
     acc = InferenceAccumulator(prob)
-    decision = (val, side) ->  DiffRule(ind, β)(to_diff(val), side)
+    decision = DiffRule(ind, β)
     Simulator(prob, acc, decision)
 end
 

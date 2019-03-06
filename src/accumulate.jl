@@ -29,9 +29,14 @@ end
 
 ################################################################################
 
-function to_diff(s::T) where T
+function to_diff(s::T)::T where T
     x = 1-1/(1+s)
     x - (1 - x)
+end
+
+function to_ratio(s::T)::T where T
+    x = (s+1)/2
+    1 / (1-x) - 1
 end
 
 mutable struct InferenceAccumulator{T} <: AbstractAccumulator{T}
@@ -40,10 +45,11 @@ mutable struct InferenceAccumulator{T} <: AbstractAccumulator{T}
     side::Union{Bool, Nothing}
     reward_evidence::T
     failure_evidence::T
+    ratio::T
     function InferenceAccumulator(prob::TaskStats{T}, value::T = zero(T), side::Union{Bool, Nothing} = nothing;
                                   reward_evidence::T = zero(T),
                                   failure_evidence::T = one(T) / (one(T) - prob.rwd)) where {T}
-        new{T}(prob, value, side, reward_evidence, failure_evidence)
+        new{T}(prob, value, side, reward_evidence, failure_evidence, to_ratio(value/prob.rwd))
     end
 end
 
@@ -52,17 +58,19 @@ Base.setindex!(s::InferenceAccumulator, val) = (s.value = val; s.value)
 
 function update!(acc::InferenceAccumulator{T}, rwd, sd)::T where T
     prob = acc.prob
+    ratio = acc.ratio
     prior = if acc.side === nothing
-        acc[]
+        ratio
     else
-        prevlow = acc.side ? one(T) / acc[] : acc[]
+        prevlow = acc.side ? one(T) / ratio : ratio
         lowprior = (prevlow + prob.dpl) / (one(T) - prob.dpl)
         (acc.side == sd) ? lowprior : one(T) / lowprior
     end
     evidence = ifelse(rwd, acc.reward_evidence, acc.failure_evidence)
     posterior = prior * evidence
     acc.side = sd
-    setindex!(acc, sd ? one(T) / posterior : posterior)
+    acc.ratio = sd ? one(T) / posterior : posterior
+    setindex!(acc, to_diff(acc.ratio)*prob.rwd)
 end
 
 ###############################################################################
