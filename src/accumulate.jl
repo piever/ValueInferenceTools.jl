@@ -5,17 +5,17 @@ function to_diff(s::T) where T
     x - (1 - x)
 end
 
-updatevaluediff(rw::Bool, sd::Bool, γ::T, prev::Nothing) where {T} = updatevaluediff(rw, sd, γ)
+updatevaluediff(γ::T, rw::Bool, sd::Bool, prev::Nothing) where {T} = updatevaluediff(γ, rw, sd)
 
-function updatevaluediff(rw::Bool, sd::Bool, γ::T, prev::T = zero(T))::T where T
+function updatevaluediff(γ::T, rw::Bool, sd::Bool, prev::T = zero(T))::T where T
     (one(T)-γ) * prev + γ * rw * to_sign(sd)
 end
 
-function valuediff(rewards::AbstractVector{Bool}, sides::AbstractVector{Bool}, γ::T) where T
+function valuediff(γ::T, rewards::AbstractVector{Bool}, sides::AbstractVector{Bool}) where T
     vals = Vector{T}(undef, length(rewards))
     for (i, (rw, sd)) in enumerate(zip(rewards, sides))
         prev = get(vals, i-1, nothing)
-        vals[i] = updatevaluediff(rw, sd, γ, prev)
+        vals[i] = updatevaluediff(γ, rw, sd, prev)
     end
     vals
 end
