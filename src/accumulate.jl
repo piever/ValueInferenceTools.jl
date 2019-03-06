@@ -5,17 +5,22 @@ function to_diff(s::T) where T
     x - (1 - x)
 end
 
+updatevaluediff(rw::Bool, sd::Bool, γ::T, prev::Nothing) where {T} = updatevaluediff(rw, sd, γ)
+
+function updatevaluediff(rw::Bool, sd::Bool, γ::T, prev::T = zero(T))::T where T
+    (one(T)-γ) * prev + γ * rw * to_sign(sd)
+end
+
 function valuediff(rewards::AbstractVector{Bool}, sides::AbstractVector{Bool}, γ::T) where T
-    start = zero(T)
-    N = length(rewards)
-    @assert N == length(sides)
-    vals = fill(start, N)
-    for i in 1:N
-        previous = i == 1 ? start : vals[i-1] 
-        vals[i] = (one(T)-γ) * previous + γ * rewards[i] * to_sign(sides[i]) 
+    vals = Vector{T}(undef, length(rewards))
+    for (i, (rw, sd)) in enumerate(zip(rewards, sides))
+        prev = get(vals, i-1, nothing)
+        vals[i] = updatevaluediff(rw, sd, γ, prev)
     end
     vals
 end
+
+################################################################################
 
 function valuediff(rewards::AbstractVector{Bool}, sides::AbstractVector{Bool}, prob::TaskStats{T}) where T
     ratios = probabilityratio(rewards, sides, prob)
